@@ -1,0 +1,8 @@
+{
+  "slug": "iv-creative",
+  "shopDomain": "your-test-store.myshopify.com",
+  "secretName": "ivc/clients/iv-creative",
+  "topKeysJson": "[\"Top line\",\"Line 1\"]",
+  "middleKeysJson": "[\"Middle line\",\"Line 2\"]",
+  "bottomKeysJson": "[\"Bottom line\",\"Line 3\"]"
+}

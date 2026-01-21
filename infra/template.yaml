@@ -1,0 +1,143 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: IV Creative — Shopify -> KornitX webhook worker (multi-tenant)
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 15
+    MemorySize: 512
+    Architectures: [x86_64]
+    Environment:
+      Variables:
+        NODE_OPTIONS: --enable-source-maps
+        CLIENTS_TABLE: !Ref ClientsTable
+        PROCESSED_TABLE: !Ref ProcessedTable
+        SKU_MAP_TABLE: !Ref SkuMapTable
+        QUEUE_URL: !Ref KXQueue
+        KX_BASE_URL: https://api-sl-2-2.kornitx.net
+
+Resources:
+  ClientsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ivc-kx-clients
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: slug
+          AttributeType: S
+      KeySchema:
+        - AttributeName: slug
+          KeyType: HASH
+
+  ProcessedTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ivc-kx-processed
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: shopOrderKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: shopOrderKey
+          KeyType: HASH
+
+  SkuMapTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ivc-kx-sku-map
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: slug
+          AttributeType: S
+        - AttributeName: sku
+          AttributeType: S
+      KeySchema:
+        - AttributeName: slug
+          KeyType: HASH
+        - AttributeName: sku
+          KeyType: RANGE
+
+  KXDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ivc-kx-dlq.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+
+  KXQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ivc-kx-queue.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt KXDLQ.Arn
+        maxReceiveCount: 5
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ivc-kx-api
+      Handler: functions/api/handler.handler
+      CodeUri: ../dist
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProcessedTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref SkuMapTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt KXQueue.QueueName
+        - Statement:
+            Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: "*" # tighten to specific ARNs later
+      Events:
+        Http:
+          Type: Api
+          Properties:
+            Path: /webhooks/shopify/{clientHook}
+            Method: post
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: ""     # <— disables OTel auto wrapper
+          OTEL_TRACES_EXPORTER: "none"
+          OTEL_METRICS_EXPORTER: "none"
+          OTEL_LOGS_EXPORTER: "none"
+
+  WorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ivc-kx-worker
+      Handler: functions/worker/handler.handler
+      CodeUri: ../dist
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProcessedTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ClientsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref SkuMapTable
+        - Statement:
+            Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: "*"
+      Events:
+        QueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt KXQueue.Arn
+            BatchSize: 1
+      Environment:
+        Variables:
+          AWS_LAMBDA_EXEC_WRAPPER: ""
+          OTEL_TRACES_EXPORTER: "none"
+          OTEL_METRICS_EXPORTER: "none"
+          OTEL_LOGS_EXPORTER: "none"
+
+Outputs:
+  ApiUrl:
+    Description: API base URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"

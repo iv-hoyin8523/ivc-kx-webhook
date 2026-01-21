@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique           // e.g. "iv-creative" or "auvodka"
+  shopDomain        String   @unique           // e.g. my-store.myshopify.com
+  shopifyWebhookKey String
+  kxCompanyRefId    String
+  kxApiKey          String
+
+  // Flexible labels (JSON text)
+  topKeysJson       String?
+  middleKeysJson    String?
+  bottomKeysJson    String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+
+model ProcessedOrder {
+  id           String   @id               // Shopify order id (stringified)
+  shopDomain   String
+  processedAt  DateTime @default(now())
+  kxExternalId String?  // whatever we sent to KX as external_ref
+}

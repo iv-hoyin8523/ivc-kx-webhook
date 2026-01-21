@@ -1,0 +1,39 @@
+{
+  "name": "ivc-kx-webhook",
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "start": "node dist/index.js",
+    "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio",
+    "prisma:push:force": "prisma db push --force-reset",
+    "build:lambda": "rimraf dist && node ./scripts/build-lambda.mjs",
+    "deploy": "npm run build:lambda && sam build -t infra/template.yaml && sam deploy --stack-name ivc-kx --capabilities CAPABILITY_IAM",
+    "clean": "rimraf .aws-sam dist"
+  },
+  "keywords": [],
+  "author": "IV Creative Limited - Ho Yin Ng",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.922.0",
+    "@aws-sdk/client-secrets-manager": "^3.922.0",
+    "@aws-sdk/client-sqs": "^3.922.0",
+    "@aws-sdk/lib-dynamodb": "^3.922.0",
+    "@fastify/env": "^5.0.3",
+    "@prisma/client": "^6.18.0",
+    "fastify": "^5.6.1",
+    "fastify-raw-body": "^5.0.0",
+    "node-fetch": "^3.3.2",
+    "undici": "^7.16.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.157",
+    "@types/node": "^24.10.0",
+    "esbuild": "^0.25.12",
+    "prisma": "^6.18.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  }
+}
